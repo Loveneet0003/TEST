@@ -41,7 +41,7 @@ const Candidate = mongoose.model('Candidate', candidateSchema);
 
 // Initialize candidates if they don't exist
 async function initializeCandidates() {
-    const candidates = [
+    const defaultCandidates = [
         { id: 1, name: "ARVIND MEEENA", voteCount: 0 },
         { id: 2, name: "RUDRA PRATAP", voteCount: 0 },
         { id: 3, name: "IVAN SHARMA", voteCount: 0 }
@@ -55,24 +55,45 @@ async function initializeCandidates() {
         if (existingCandidates.length === 0) {
             console.log('No candidates found, creating new ones...');
             // If no candidates exist, create them
-            for (const candidate of candidates) {
+            for (const candidate of defaultCandidates) {
                 const newCandidate = await Candidate.create(candidate);
                 console.log('Created candidate:', newCandidate);
             }
             console.log('Candidates initialized successfully');
         } else {
-            console.log('Candidates already exist in database');
+            // Verify all required candidates exist
+            const existingIds = existingCandidates.map(c => c.id);
+            const missingCandidates = defaultCandidates.filter(c => !existingIds.includes(c.id));
+            
+            if (missingCandidates.length > 0) {
+                console.log('Some candidates are missing, adding them...');
+                for (const candidate of missingCandidates) {
+                    const newCandidate = await Candidate.create(candidate);
+                    console.log('Added missing candidate:', newCandidate);
+                }
+            }
+            
+            // Update names in case they were changed
+            for (const defaultCandidate of defaultCandidates) {
+                await Candidate.findOneAndUpdate(
+                    { id: defaultCandidate.id },
+                    { $set: { name: defaultCandidate.name } },
+                    { new: true }
+                );
+            }
+            
+            console.log('Candidates verified and updated');
         }
     } catch (error) {
         console.error('Error initializing candidates:', error);
     }
 }
 
-// Call initializeCandidates when the server starts
-initializeCandidates().then(() => {
-    console.log('Candidate initialization completed');
-}).catch(err => {
-    console.error('Error during initialization:', err);
+// Call initializeCandidates when the server starts and after MongoDB connects
+connection.once('open', async () => {
+    console.log("MongoDB database connection established successfully");
+    await initializeCandidates();
+    console.log('Initial candidate setup completed');
 });
 
 // Add a route to check initialization status
